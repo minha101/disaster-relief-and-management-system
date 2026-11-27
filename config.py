@@ -22,9 +22,19 @@ def _secret_key():
         return fh.read().strip()
 
 
+
 def _db_url():
     url = os.environ.get('DATABASE_URL', '').strip()
-    return url or 'sqlite:///' + os.path.join(instance_dir, 'drms.db').replace('\\', '/')
+
+    if url:
+        if url.startswith('postgres://'):
+            url = url.replace('postgres://', 'postgresql://', 1)
+        return url
+
+    return 'sqlite:///' + os.path.join(
+        instance_dir, 'drms.db'
+    ).replace('\\', '/')
+
 
 
 class Config:
