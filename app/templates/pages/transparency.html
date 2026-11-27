@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Transparency{% endblock %}
+{% block content %}
+<h4>Donation &amp; Relief Transparency</h4>
+<div class="alert alert-info small">Aggregated totals only; donor identities are never shown. Record mix — {% for k,v in comp.items() %}{{ k }}: {{ v.sample }} sample / {{ v.reported }} reported / {{ v.verified }} verified{{ '; ' if not loop.last }}{% endfor %}. "Sample" rows are fictional demo data.</div>
+<div class="card mb-3"><div class="card-body"><h6>Fundraising campaigns — total received PKR {{ '{:,.0f}'.format(total) }}</h6>
+{% for c in campaigns %}<div class="mb-3"><div class="d-flex justify-content-between"><span>{{ c.title }}</span><span class="small">PKR {{ '{:,.0f}'.format(c.raised) }} / {{ '{:,.0f}'.format(c.goal) }} ({{ c.pct }}%)</span></div>
+<div class="progress"><div class="progress-bar" style="width:{{ [c.pct,100]|min }}%"></div></div></div>{% else %}<p class="text-muted">No campaigns.</p>{% endfor %}</div></div>
+<div class="card"><div class="card-body"><h6>Relief distributed ({{ delivered }} allocation transfers delivered)</h6>
+<table class="table table-sm"><thead><tr><th>Resource</th><th>Quantity distributed</th><th>Beneficiaries reached*</th></tr></thead>
+{% for n,u,q,b in dist %}<tr><td>{{ n }}</td><td>{{ '{:,.0f}'.format(q) }} {{ u }}</td><td>{{ '{:,}'.format(b or 0) }}</td></tr>{% else %}<tr><td colspan="3" class="text-muted">No distribution records.</td></tr>{% endfor %}</table>
+<small class="text-muted">*Beneficiary counts may overlap across distributions.</small></div></div>
+{% endblock %}

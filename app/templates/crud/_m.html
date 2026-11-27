@@ -1,0 +1,44 @@
+{% macro field(f, err) %}
+<div class="col-md-{{ 12 if f.kind=='textarea' else 6 }}">
+  <label class="form-label fw-semibold small">{{ f.label }}{% if f.required %} <span class="text-danger">*</span>{% endif %}</label>
+  {% if f.kind=='select' %}
+  <select name="{{ f.name }}" class="form-select{{ ' is-invalid' if err }}">
+    <option value="">— select —</option>
+    {% for v,l in f.choices %}<option value="{{ v }}" {{ 'selected' if f.value is not none and f.value|string==v|string }}>{{ l }}</option>{% endfor %}
+  </select>
+  {% elif f.kind=='checkbox' %}
+  <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="{{ f.name }}" value="1" {{ 'checked' if f.value }}></div>
+  {% elif f.kind=='textarea' %}
+  <textarea name="{{ f.name }}" rows="3" class="form-control{{ ' is-invalid' if err }}">{{ f.value or '' }}</textarea>
+  {% elif f.kind=='password' %}
+  <input type="password" name="{{ f.name }}" class="form-control{{ ' is-invalid' if err }}" autocomplete="new-password">
+  {% else %}
+  <input type="{{ f.kind }}" name="{{ f.name }}" value="{{ f.value if f.value is not none else '' }}" class="form-control{{ ' is-invalid' if err }}"
+    {% if f.step %}step="{{ f.step }}"{% endif %}{% if f.min %} min="{{ f.min }}"{% endif %}{% if f.max %} max="{{ f.max }}"{% endif %}{% if f.maxlength %} maxlength="{{ f.maxlength }}"{% endif %}>
+  {% endif %}
+  {% if err %}<div class="invalid-feedback d-block">{{ err }}</div>{% endif %}
+  {% if f.help %}<div class="form-text">{{ f.help }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro cell(c, first=false, url=None) %}
+{%- if c.kind=='badge' -%}<span class="badge text-bg-{{ c.cls }}{{ ' badge-sample' if c.text=='sample' }}">{{ c.text }}</span>
+{%- elif first and url -%}<a href="{{ url }}" class="fw-semibold text-decoration-none">{{ c.text or '—' }}</a>
+{%- elif c.url -%}<a href="{{ c.url }}" class="text-decoration-none">{{ c.text }}</a>
+{%- else -%}{{ c.text }}{%- endif -%}
+{% endmacro %}
+
+{% macro table(cfg, td, actions=true, sort=none, direction='desc', args={}) %}
+<div class="table-responsive"><table class="table table-hover align-middle mb-0">
+  <thead><tr>
+    {% for name, label in td.headers %}<th>{% if sort is not none %}<a href="{{ url_for('crud.index', slug=cfg.slug, **dict(args, sort=name, dir=('asc' if sort==name and direction=='desc' else 'desc'))) }}">{{ label }}{% if sort==name %} <i class="bi bi-caret-{{ 'up' if direction=='asc' else 'down' }}-fill"></i>{% endif %}</a>{% else %}{{ label }}{% endif %}</th>{% endfor %}
+    {% if actions %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for r in td.rows %}<tr>
+    {% for c in r.cells %}<td>{{ cell(c, loop.first, url_for('crud.detail', slug=cfg.slug, id=r.obj.id)) }}</td>{% endfor %}
+    {% if actions %}<td class="text-end text-nowrap"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('crud.detail', slug=cfg.slug, id=r.obj.id) }}" title="View"><i class="bi bi-eye"></i></a>
+      {% if current_user.can(cfg.slug,'edit') and not cfg.readonly and not cfg.immutable and (current_user.can(cfg.slug,'all') or r.obj.created_by_id==current_user.id) %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('crud.edit', slug=cfg.slug, id=r.obj.id) }}" title="Edit"><i class="bi bi-pencil"></i></a>{% endif %}
+      {% if current_user.can(cfg.slug,'delete') and not cfg.readonly and not cfg.immutable %}<form method="post" action="{{ url_for('crud.delete', slug=cfg.slug, id=r.obj.id) }}" class="d-inline" data-confirm="Delete this record permanently?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button></form>{% endif %}</td>{% endif %}
+  </tr>{% else %}<tr><td colspan="{{ td.headers|length + 1 }}" class="text-center text-muted py-4">No records found.</td></tr>{% endfor %}
+  </tbody></table></div>
+{% endmacro %}

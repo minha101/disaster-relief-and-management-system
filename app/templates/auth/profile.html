@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% import 'auth/_f.html' as a %}
+{% block title %}My account{% endblock %}
+{% block content %}<div class="row"><div class="col-md-6 col-lg-4"><div class="card"><div class="card-body">
+<h5>{{ current_user.full_name }}</h5><p class="text-muted small">{{ current_user.email }} · {{ current_user.role_names }}</p>
+<form method="post" novalidate>{{ form.hidden_tag() }}{{ a.wf(form.current) }}{{ a.wf(form.password) }}{{ a.wf(form.confirm) }}<button class="btn btn-primary">Change password</button></form>
+</div></div></div></div>{% endblock %}

@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Disaster Analytics{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-end gap-2 mb-3"><h4 class="mb-0 me-auto"><i class="bi bi-bar-chart-line text-primary"></i> Disaster analytics</h4>
+<form class="d-flex gap-2" method="get" data-noload>
+ <select class="form-select form-select-sm" name="province"><option value="">All provinces</option>{% for p in provinces %}<option value="{{ p.id }}" {{ 'selected' if args.get('province')|string==p.id|string }}>{{ p.name }}</option>{% endfor %}</select>
+ <select class="form-select form-select-sm" name="type"><option value="">All types</option>{% for t in types %}<option value="{{ t.id }}" {{ 'selected' if args.get('type')|string==t.id|string }}>{{ t.name }}</option>{% endfor %}</select>
+ <select class="form-select form-select-sm" name="days"><option value="">All time</option>{% for d in [30,90,180,365] %}<option value="{{ d }}" {{ 'selected' if args.get('days')|string==d|string }}>Last {{ d }} days</option>{% endfor %}</select>
+ <button class="btn btn-sm btn-primary">Apply</button><a class="btn btn-sm btn-outline-secondary" data-noload href="{{ url_for('intel.analytics_csv', **args) }}">CSV</a></form></div>
+<div class="row g-3 mb-3" id="kpis"></div>
+<div class="row g-3">
+ <div class="col-lg-7"><div class="card h-100"><div class="card-body"><h6>Affected population by district</h6><canvas id="a1" height="140"></canvas></div></div></div>
+ <div class="col-lg-5"><div class="card h-100"><div class="card-body"><h6>Incidents by type</h6><canvas id="a2" height="200"></canvas></div></div></div>
+ <div class="col-lg-7"><div class="card h-100"><div class="card-body"><h6>Rescue progress (rescued ÷ affected, %)</h6><canvas id="a3" height="140"></canvas></div></div></div>
+ <div class="col-lg-5"><div class="card h-100"><div class="card-body"><h6>Rescue operations by status</h6><canvas id="a4" height="200"></canvas></div></div></div>
+ <div class="col-12"><div class="card"><div class="card-body"><h6>District table</h6><div class="table-responsive"><table class="table table-sm" id="tbl"><thead><tr><th>District</th><th>Province</th><th>Incidents</th><th>Affected</th><th>Rescued</th><th>Rescue %</th><th>Open SOS</th><th>Camps</th></tr></thead><tbody></tbody></table></div></div></div></div>
+</div>
+<p class="text-muted small mt-2">Record mix — {% for k,v in comp.items() %}{{ k }}: {{ v.sample }} sample / {{ v.reported }} reported / {{ v.verified }} verified{{ '; ' if not loop.last }}{% endfor %}. Use “Show real data only” in the banner to exclude sample records.</p>
+{% endblock %}
+{% block scripts %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+api('/api/analytics'+location.search).then(d=>{
+ const k=[['Incidents',d.totals.incidents],['People affected',d.totals.affected.toLocaleString()],['People rescued',d.totals.rescued.toLocaleString()]];
+ document.getElementById('kpis').innerHTML=k.map(x=>`<div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">${x[0]}</div><div class="fs-3 fw-bold">${x[1]}</div></div></div></div>`).join('');
+ const n=d.districts.map(x=>x.district);
+ new Chart('a1',{type:'bar',data:{labels:n,datasets:[{label:'Affected',data:d.districts.map(x=>x.affected),backgroundColor:'#ef4444'},{label:'Rescued',data:d.districts.map(x=>x.rescued),backgroundColor:'#22c55e'}]}});
+ new Chart('a2',{type:'doughnut',data:{labels:Object.keys(d.by_type),datasets:[{data:Object.values(d.by_type)}]}});
+ new Chart('a3',{type:'bar',data:{labels:n,datasets:[{label:'Rescue %',data:d.districts.map(x=>x.rescue_pct),backgroundColor:'#1d4ed8'}]},options:{scales:{y:{max:100}},plugins:{legend:{display:false}}}});
+ new Chart('a4',{type:'pie',data:{labels:Object.keys(d.ops),datasets:[{data:Object.values(d.ops)}]}});
+ document.querySelector('#tbl tbody').innerHTML=d.districts.map(x=>`<tr><td>${x.district}</td><td>${x.province}</td><td>${x.incidents}</td><td>${x.affected.toLocaleString()}</td><td>${x.rescued.toLocaleString()}</td><td>${x.rescue_pct}</td><td>${x.open_sos}</td><td>${x.camps}</td></tr>`).join('');
+});
+</script>{% endblock %}

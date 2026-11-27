@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}Reports{% endblock %}
+{% block content %}<h4>PDF Reports</h4><p class="text-muted small">Reports follow the current data scope (sample data {{ 'excluded' if scope=='real' else 'included and labelled' }}). Every report states its data mix.</p>
+<div class="row g-3">{% for k,t in kinds.items() %}<div class="col-md-4"><div class="card h-100"><div class="card-body d-flex flex-column"><h6><i class="bi bi-file-earmark-pdf text-danger"></i> {{ t }}</h6>
+<a class="btn btn-primary btn-sm mt-auto" target="_blank" href="{{ url_for('reports.generate', kind=k) }}">Generate PDF</a></div></div></div>{% endfor %}</div>
+<div class="mt-3"><a href="{{ url_for('crud.index', slug='reports') }}" class="btn btn-link">History of generated reports</a></div>{% endblock %}

@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block title %}Notifications{% endblock %}
+{% block content %}<div class="d-flex mb-3"><h4>Notifications</h4><form method="post" action="{{ url_for('main.notifications_read') }}" class="ms-auto"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-secondary">Mark all read</button></form></div>
+<div class="list-group">{% for n in p.items %}<a href="{{ n.link or '#' }}" class="list-group-item list-group-item-action {{ '' if n.is_read else 'fw-semibold' }}"><span class="badge text-bg-{{ {'danger':'danger','warning':'warning','success':'success'}.get(n.level,'primary') }}">{{ n.level }}</span> {{ n.title }}<div class="small text-muted">{{ n.message }} · {{ n.created_at.strftime('%d %b %H:%M') }}</div></a>{% else %}<div class="text-muted p-3">Nothing yet.</div>{% endfor %}</div>
+<div class="mt-2">{% if p.has_prev %}<a class="btn btn-sm btn-light" href="?page={{ p.prev_num }}">Prev</a>{% endif %}{% if p.has_next %}<a class="btn btn-sm btn-light" href="?page={{ p.next_num }}">Next</a>{% endif %}</div>{% endblock %}

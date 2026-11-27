@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}Risk Index{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+    <h4 class="mb-0"><i class="bi bi-shield-exclamation text-primary"></i> District risk index <span
+            class="badge text-bg-warning">heuristic — not a prediction</span></h4>
+    <form class="ms-auto d-flex gap-2" method="get" data-noload><select name="basis" class="form-select form-select-sm"
+            onchange="this.form.submit()">{% for k,l in labels.items() %}<option value="{{ k }}" {{ 'selected' if
+                k==basis }}>{{ l }}</option>{% endfor %}</select></form>
+    {% if can_save %}<form method="post" action="{{ url_for('intel.risk_snapshot') }}"
+        data-confirm="Save these scores as risk assessment records?"><input type="hidden" name="csrf_token"
+            value="{{ csrf_token() }}"><input type="hidden" name="basis" value="{{ basis }}"><button
+            class="btn btn-sm btn-outline-primary">Save snapshot</button></form>{% endif %}
+    <a class="btn btn-sm btn-outline-secondary" target="_blank"
+        href="{{ url_for('reports.generate', kind='risk', basis=basis) }}">PDF</a>
+</div>
+<div class="alert alert-info small"><b>How to read this.</b> The index ranks districts by <i>recorded</i> incidents in
+    the last {{ years }} years and any active flood alerts. Weights: {% for k,v in weights.items() %}{{ k|replace('_','
+    ') }} {{ (v*100)|int }}%{{ ', ' if not loop.last }}{% endfor %}. It uses no rainfall, river, terrain or
+    population-exposure data and has <b>not been statistically validated</b>, so it is a screening aid, not a forecast.
+    Confidence is “low” when a district has fewer than 3 incidents or most of its records are sample data. Basis now:
+    <b>{{ labels[basis] }}</b> ({{ n_inc }} incidents).
+    {% if basis=='all' %}<br><b>Sample demo data is included — scores reflect fictional records.</b>{% endif %}</div>
+{% if n_inc==0 %}<div class="alert alert-warning">No incidents match this basis yet. Verify reported incidents or choose
+    a wider basis.</div>{% endif %}
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body p-2">
+                <div id="rmap" class="map-box"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height:68vh">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="sticky-top bg-white">
+                            <tr>
+                                <th>District</th>
+                                <th>Incidents</th>
+                                <th>Score</th>
+                                <th>Level</th>
+                                <th>Confidence</th>
+                                <th>Sample %</th>
+                            </tr>
+                        </thead>
+                        {% for r in results if r.has_data or r.score>0 %}<tr>
+                            <td>{{ r.district }} <small class="text-muted">{{ r.province }}</small></td>
+                            <td>{{ r.incidents }}</td>
+                            <td style="min-width:110px">
+                                <div class="progress">
+                                    <div class="progress-bar bg-{{ {'low':'secondary','moderate':'info','high':'warning','very_high':'danger'}[r.level] }}"
+                                        style="width:{{ r.score }}%"></div>
+                                </div> <small>{{ r.score }}</small>
+                            </td>
+                            <td><span
+                                    class="badge text-bg-{{ {'low':'secondary','moderate':'info','high':'warning','very_high':'danger'}[r.level] }}">{{
+                                    r.level|replace('_',' ') }}</span></td>
+                            <td>{{ r.confidence }}</td>
+                            <td>{{ r.sample_share }}</td>
+                        </tr>{% endfor %}
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const R = {{ results| tojson }}; const C = { low: '#94a3b8', moderate: '#3b82f6', high: '#f59e0b', very_high: '#dc2626' };
+    
+L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+    }
+).addTo(map);
+
+    R.filter(r => r.lat && (r.has_data || r.score > 0)).forEach(r => L.circle([r.lat, r.lng], { radius: 15000 + r.score * 1500, color: C[r.level], fillOpacity: .35, weight: 1 }).bindPopup(`<b>${r.district}</b><br>Index ${r.score} (${r.level}) · confidence ${r.confidence}<br>${r.incidents} incidents recorded`).addTo(map));
+</script>{% endblock %}

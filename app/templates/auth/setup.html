@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% import 'auth/_f.html' as a %}
+{% block title %}First-run setup{% endblock %}
+{% block content %}<div class="row justify-content-center"><div class="col-md-6 col-lg-5"><div class="card"><div class="card-body p-4">
+<h4>First-run setup</h4><p class="text-muted small">Create the Super Admin account. This page disappears once a user exists. No password is stored in any file.</p>
+<form method="post" novalidate>{{ form.hidden_tag() }}{{ a.wf(form.full_name) }}{{ a.wf(form.email) }}{{ a.wf(form.password) }}{{ a.wf(form.confirm) }}
+<button class="btn btn-primary w-100">Create Super Admin</button></form></div></div></div></div>{% endblock %}

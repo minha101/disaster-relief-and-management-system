@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Emergency SOS{% endblock %}
+{% block head %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endblock %}
+{% block content %}
+<div class="alert alert-danger"><b>Life-threatening emergency?</b> Call <b>1122</b> / <b>115</b> first. Use this form to also share your exact location with the relief authority.</div>
+<div class="card"><div class="card-body"><h4><i class="bi bi-broadcast text-danger"></i> Emergency SOS request</h4>
+<form method="post" novalidate class="row g-3">{{ form.hidden_tag() }}
+<div style="position:absolute;left:-9999px" aria-hidden="true">{{ form.website(tabindex=-1, autocomplete='off') }}</div>
+{% macro fld(f, cols=6) %}<div class="col-md-{{ cols }}"><label class="form-label small fw-semibold">{{ f.label.text }}</label>{{ f(class='form-control' + (' is-invalid' if f.errors else ''), **kwargs) }}{% for e in f.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}</div>{% endmacro %}
+{{ fld(form.requester_name) }}{{ fld(form.phone) }}{{ fld(form.people_count, 4, min=1) }}
+<div class="col-md-4"><label class="form-label small fw-semibold">{{ form.category_id.label.text }}</label>{{ form.category_id(class='form-select') }}</div>
+<div class="col-md-4"><label class="form-label small fw-semibold">{{ form.district_id.label.text }}</label>{{ form.district_id(class='form-select') }}</div>
+<div class="col-12"><label class="form-label small fw-semibold">Location — tap the map or use GPS</label>
+ <div class="d-flex gap-2 mb-2"><button type="button" class="btn btn-outline-primary btn-sm" id="gps"><i class="bi bi-crosshair"></i> Use my location</button><span class="small text-muted align-self-center" id="gpsmsg"></span></div>
+ <div id="pick" class="map-sm"></div></div>
+{{ fld(form.latitude, 3, step='any', id='lat') }}{{ fld(form.longitude, 3, step='any', id='lng') }}{{ fld(form.address, 6) }}
+<div class="col-md-6"><div class="form-check">{{ form.has_injured(class='form-check-input') }} <label class="form-check-label">{{ form.has_injured.label.text }}</label></div>
+<div class="form-check">{{ form.needs_medical(class='form-check-input') }} <label class="form-check-label">{{ form.needs_medical.label.text }}</label></div></div>
+<div class="col-12"><label class="form-label small fw-semibold">{{ form.description.label.text }}</label>{{ form.description(class='form-control', rows=3) }}</div>
+<div class="col-12"><button class="btn btn-danger btn-lg"><i class="bi bi-send"></i> Submit SOS</button></div></form></div></div>
+{% endblock %}
+{% block scripts %}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+
+L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+    }
+).addTo(map);
+
+let mk=null;const lat=document.getElementById('lat'),lng=document.getElementById('lng');
+function put(a,b,z){if(mk)mk.setLatLng([a,b]);else mk=L.marker([a,b]).addTo(map);lat.value=a.toFixed(6);lng.value=b.toFixed(6);if(z)map.setView([a,b],z);}
+map.on('click',e=>put(e.latlng.lat,e.latlng.lng));
+if(lat.value&&lng.value)put(+lat.value,+lng.value,10);
+document.getElementById('gps').onclick=()=>{const m=document.getElementById('gpsmsg');if(!navigator.geolocation){m.textContent='GPS not available';return;}
+m.textContent='Locating...';navigator.geolocation.getCurrentPosition(p=>{put(p.coords.latitude,p.coords.longitude,14);m.textContent='Accuracy ±'+Math.round(p.coords.accuracy)+' m';},()=>m.textContent='Could not get location — tap the map instead',{enableHighAccuracy:true,timeout:15000});};
+</script>{% endblock %}

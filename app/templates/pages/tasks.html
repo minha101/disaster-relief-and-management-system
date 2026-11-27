@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Task Board{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3"><h4 class="mb-0"><i class="bi bi-kanban text-primary"></i> Task board</h4>
+<form class="d-flex gap-2 ms-auto" method="get" data-noload>
+ <select class="form-select form-select-sm" name="district"><option value="">All districts</option>{% for d in districts %}<option value="{{ d.id }}" {{ 'selected' if args.get('district')|string==d.id|string }}>{{ d.name }}</option>{% endfor %}</select>
+ <select class="form-select form-select-sm" name="priority"><option value="">Any priority</option>{% for p in ['critical','high','medium','low'] %}<option {{ 'selected' if args.get('priority')==p }}>{{ p }}</option>{% endfor %}</select>
+ <div class="form-check align-self-center text-nowrap"><input class="form-check-input" type="checkbox" name="mine" value="1" id="mine" {{ 'checked' if args.get('mine') }}><label class="form-check-label small" for="mine">Mine</label></div>
+ <button class="btn btn-sm btn-primary">Filter</button></form>
+ {% if current_user.can('tasks','create') %}<form class="d-flex gap-1" id="quick" data-noload><input class="form-control form-control-sm" name="title" placeholder="Quick add task…" maxlength="200" required>
+ <select class="form-select form-select-sm" name="priority" style="width:100px"><option>medium</option><option>high</option><option>critical</option><option>low</option></select><button class="btn btn-sm btn-outline-primary">Add</button></form>{% endif %}</div>
+{% if can_edit %}<p class="text-muted small">Drag cards between columns; changes are saved immediately.</p>{% endif %}
+<div class="kanban">
+{% for key, label in columns %}<div class="kcol"><div class="d-flex justify-content-between mb-2"><b>{{ label }}</b><span class="badge text-bg-secondary">{{ cols[key]|length }}</span></div>
+ <div class="cards" data-status="{{ key }}">
+ {% for t in cols[key] %}<div class="kcard p-{{ t.priority }}" data-id="{{ t.id }}"><a class="fw-semibold text-decoration-none" href="{{ url_for('crud.detail', slug='tasks', id=t.id) }}">{{ t.title }}</a>
+  <div class="small text-muted mt-1"><span class="badge text-bg-light border">{{ t.priority }}</span>
+  {% if t.due_date %}<span class="{{ 'text-danger fw-semibold' if t.due_date < today and t.status!='done' }}"><i class="bi bi-calendar"></i> {{ t.due_date.strftime('%d %b') }}</span>{% endif %}
+  {% if t.data_source=='sample' %}<span class="badge badge-sample">sample</span>{% endif %}</div>
+  {% if names.get(t.id) %}<div class="small mt-1"><i class="bi bi-person"></i> {{ names[t.id]|join(', ') }}</div>{% endif %}</div>{% endfor %}
+ </div></div>{% endfor %}</div>
+{% endblock %}
+{% block scripts %}<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+{% if can_edit %}
+document.querySelectorAll('.cards').forEach(el=>new Sortable(el,{group:'tasks',animation:150,onEnd:ev=>{
+ [ev.from,ev.to].forEach(col=>{ if(col===ev.from&&ev.from===ev.to||col!==ev.from||true){
+   const order=[...col.querySelectorAll('.kcard')].map(c=>c.dataset.id);
+   api('/tasks/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:col.dataset.status,order})}).catch(()=>toast('Could not save move','danger'));}});
+ document.querySelectorAll('.kcol').forEach(c=>c.querySelector('.badge').textContent=c.querySelectorAll('.kcard').length);
+ toast('Task moved','success');}}));
+{% endif %}
+document.getElementById('quick')?.addEventListener('submit',e=>{e.preventDefault();api('/tasks/quick',{method:'POST',body:new FormData(e.target)}).then(()=>location.reload()).catch(()=>toast('Could not add task','danger'));});
+</script>{% endblock %}

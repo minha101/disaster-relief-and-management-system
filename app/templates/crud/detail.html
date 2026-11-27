@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% import 'crud/_m.html' as m with context %}
+{% block title %}{{ obj.label }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div><a class="small text-decoration-none" href="{{ url_for('crud.index', slug=cfg.slug) }}">← {{ cfg.title }}</a><h4 class="mb-0">{{ obj.label }}</h4></div>
+  <div class="ms-auto d-flex gap-2">
+    {% if can_verify %}<form method="post" action="{{ url_for('crud.verify', slug=cfg.slug, id=obj.id) }}" data-confirm="Mark this record as verified by you?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-success btn-sm"><i class="bi bi-patch-check"></i> Mark verified</button></form>{% endif %}
+    {% if can_edit %}<a class="btn btn-outline-primary btn-sm" href="{{ url_for('crud.edit', slug=cfg.slug, id=obj.id) }}"><i class="bi bi-pencil"></i> Edit</a>{% endif %}
+    {% if can_delete %}<form method="post" action="{{ url_for('crud.delete', slug=cfg.slug, id=obj.id) }}" data-confirm="Delete this record permanently?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i> Delete</button></form>{% endif %}
+  </div></div>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card"><div class="card-body"><dl class="row mb-0">
+    {% for label, c in fields %}<dt class="col-sm-4 text-muted fw-normal">{{ label }}</dt><dd class="col-sm-8">{{ m.cell(c) }}</dd>{% endfor %}
+  </dl></div></div></div>
+  <div class="col-lg-5">
+    <div class="card mb-3"><div class="card-body"><h6><i class="bi bi-paperclip"></i> Files &amp; images</h6>
+      {% for i in images %}<div class="d-flex align-items-center gap-2 mb-2"><a href="{{ url_for('main.files', name=i.stored_name) }}" target="_blank"><img src="{{ url_for('main.files', name=i.stored_name) }}" style="height:56px;border-radius:.4rem" alt=""></a><span class="small">{{ i.caption or i.file_name }}</span>
+        {% if can_edit %}<form method="post" class="ms-auto" action="{{ url_for('crud.delete_file', slug=cfg.slug, id=obj.id, kind='image', fid=i.id) }}" data-confirm="Remove this image?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></button></form>{% endif %}</div>{% endfor %}
+      {% for f in files %}<div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-file-earmark"></i><a href="{{ url_for('main.files', name=f.stored_name) }}" class="small">{{ f.original_name }}</a><span class="text-muted small">{{ (f.size_bytes or 0)//1024 }} KB</span>
+        {% if can_edit %}<form method="post" class="ms-auto" action="{{ url_for('crud.delete_file', slug=cfg.slug, id=obj.id, kind='file', fid=f.id) }}" data-confirm="Remove this file?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></button></form>{% endif %}</div>{% endfor %}
+      {% if not files and not images %}<div class="text-muted small mb-2">No files attached.</div>{% endif %}
+      {% if can_edit and not cfg.readonly %}<form method="post" enctype="multipart/form-data" action="{{ url_for('crud.upload', slug=cfg.slug, id=obj.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="file" class="form-control form-control-sm mb-1" required accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.docx,.xlsx,.txt,.csv">
+        <div class="input-group input-group-sm"><input class="form-control" name="description" placeholder="Caption (optional)" maxlength="255"><button class="btn btn-outline-primary">Upload</button></div>
+        <div class="form-text">Images, PDF, DOCX, XLSX, TXT, CSV · max 8 MB</div></form>{% endif %}
+    </div></div>
+  </div>
+</div>
+{% for k in kids %}
+<div class="card mt-3"><div class="card-body">
+  <div class="d-flex align-items-center mb-2"><h6 class="mb-0"><i class="bi bi-{{ k.cfg.icon }}"></i> {{ k.cfg.title }} <span class="text-muted">({{ k.count }})</span></h6>
+    {% if k.can_add %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{{ url_for('crud.new', slug=k.cfg.slug, next=request.path, **{k.fk: obj.id}) }}"><i class="bi bi-plus"></i> Add</a>{% endif %}</div>
+  {{ m.table(k.cfg, k.td, true) }}</div></div>
+{% endfor %}
+{% endblock %}

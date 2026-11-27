@@ -1,0 +1,642 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Live Disaster Map{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+    #map {
+        width: 100%;
+        height: 65vh;
+        min-height: 480px;
+        border-radius: 12px;
+        z-index: 1;
+    }
+
+    .sos-dot {
+        background: #dc2626;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 8px rgba(220, 38, 38, .7);
+        animation: sosPulse 1.5s infinite;
+    }
+
+    @keyframes sosPulse {
+        0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, .6); }
+        70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+
+    .map-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .map-legend span {
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="d-flex flex-wrap align-items-center mb-2 gap-2">
+
+    <h4 class="mb-0">
+        <i class="bi bi-globe-asia-australia text-primary"></i>
+        Disaster map — Pakistan
+    </h4>
+
+    <span class="ms-auto small text-muted" id="stamp">
+        Loading map data...
+    </span>
+
+</div>
+
+
+<div class="alert alert-secondary py-2 small mb-2">
+
+    Markers come from records in this system and refresh from the
+    database every 30 seconds.
+
+    Team positions are the <b>last position entered by staff</b>
+    (shown with its time) — <b>not live GPS</b>.
+
+    {% if has_sample %}
+    Markers tagged
+    <span class="badge badge-sample">sample</span>
+    are fictional demo data.
+    {% endif %}
+
+</div>
+
+
+<div class="card">
+    <div class="card-body p-2">
+        <div id="map"></div>
+    </div>
+</div>
+
+
+<div class="small text-muted mt-2 map-legend">
+
+    <span style="color:#dc2626">■ Critical</span>
+    <span style="color:#f59e0b">■ High</span>
+    <span style="color:#3b82f6">■ Moderate</span>
+    <span style="color:#94a3b8">■ Low</span>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    // =====================================
+    // 1. INITIALIZE MAP
+    // =====================================
+
+    const map = L.map('map').setView([30.2, 69.3], 5);
+
+
+    // =====================================
+    // 2. CARTO VOYAGER MAP TILES
+    // =====================================
+
+    
+
+L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    {
+        attribution: 'Tiles &copy; Esri',
+        maxZoom: 19
+    }
+).addTo(map);
+
+
+    // =====================================
+    // 3. MAP LAYERS
+    // =====================================
+
+    const LAYERS = [
+        'incidents',
+        'sos',
+        'camps',
+        'teams',
+        'areas',
+        'hospitals',
+        'alerts',
+        'routes'
+    ];
+
+
+    const NAMES = {
+        incidents: 'Flood incidents',
+        sos: 'SOS requests',
+        camps: 'Relief camps',
+        teams: 'Rescue teams (last reported)',
+        areas: 'Affected villages',
+        hospitals: 'Hospitals',
+        alerts: 'Flood alerts (district)',
+        routes: 'Evacuation routes'
+    };
+
+
+    const groups = {};
+
+    LAYERS.forEach(function (key) {
+
+        groups[key] = L.layerGroup().addTo(map);
+
+    });
+
+
+    L.control.layers(
+        null,
+        Object.fromEntries(
+            LAYERS.map(key => [NAMES[key], groups[key]])
+        ),
+        {
+            collapsed: false
+        }
+    ).addTo(map);
+
+
+    // =====================================
+    // 4. COLORS
+    // =====================================
+
+    const SEV = {
+        critical: '#dc2626',
+        high: '#f59e0b',
+        moderate: '#3b82f6',
+        low: '#94a3b8'
+    };
+
+
+    const FL = {
+        normal: '#22c55e',
+        low: '#84cc16',
+        medium: '#f59e0b',
+        high: '#ea580c',
+        very_high: '#dc2626',
+        exceptional: '#7f1d1d'
+    };
+
+
+    // =====================================
+    // 5. SAFE HTML
+    // =====================================
+
+    const esc = function (s) {
+
+        return String(s ?? '').replace(
+            /[&<>"']/g,
+            function (c) {
+
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[c];
+
+            }
+        );
+
+    };
+
+
+    const tag = function (s) {
+
+        if (s === 'sample') {
+
+            return ' <span style="background:#e2e8f0;padding:0 4px;border-radius:3px">sample</span>';
+
+        }
+
+        if (s === 'verified') {
+
+            return ' <span style="color:#16a34a">✔ verified</span>';
+
+        }
+
+        return '';
+
+    };
+
+
+    const dot = function (color, radius = 8) {
+
+        return {
+            radius: radius,
+            color: '#fff',
+            weight: 1.5,
+            fillColor: color,
+            fillOpacity: 0.9
+        };
+
+    };
+
+
+    // =====================================
+    // 6. DRAW MAP DATA
+    // =====================================
+
+    function draw(d) {
+
+        // Clear previous markers
+
+        Object.values(groups).forEach(function (group) {
+
+            group.clearLayers();
+
+        });
+
+
+        // FLOOD INCIDENTS
+
+        (d.incidents || []).forEach(function (r) {
+
+            if (!Number.isFinite(Number(r.lat)) ||
+                !Number.isFinite(Number(r.lng))) return;
+
+            L.circleMarker(
+                [Number(r.lat), Number(r.lng)],
+                dot(SEV[r.severity] || '#64748b', 8)
+
+            ).bindPopup(
+
+                `<b>${esc(r.title)}</b>
+                ${tag(r.src)}
+                <br>${esc(r.district)}
+                · ${esc(r.severity)}
+                · ${esc(r.status)}
+                <br>Affected ${esc(r.affected)}
+                · rescued ${esc(r.rescued)}
+                <br><a href="${esc(r.url)}">Open</a>`
+
+            ).addTo(groups.incidents);
+
+        });
+
+
+        // SOS REQUESTS
+
+        (d.sos || []).forEach(function (r) {
+
+            if (!Number.isFinite(Number(r.lat)) ||
+                !Number.isFinite(Number(r.lng))) return;
+
+            L.marker(
+                [Number(r.lat), Number(r.lng)],
+                {
+                    icon: L.divIcon({
+
+                        className: '',
+
+                        html:
+                            '<div class="sos-dot" style="width:16px;height:16px"></div>',
+
+                        iconSize: [16, 16]
+
+                    })
+                }
+
+            ).bindPopup(
+
+                `<b>${esc(r.code)}</b>
+                ${tag(r.src)}
+                <br>${esc(r.people)} people
+                · ${esc(r.priority)}
+                · ${esc(r.status)}
+                ${r.injured ? '<br>⚠ Injured reported' : ''}
+                ${r.phone ? '<br>☎ ' + esc(r.phone) : ''}
+                <br>${esc(r.when)}
+                <br><a href="${esc(r.url)}">Open</a>`
+
+            ).addTo(groups.sos);
+
+        });
+
+
+        // RELIEF CAMPS
+
+        (d.camps || []).forEach(function (r) {
+
+            if (!Number.isFinite(Number(r.lat)) ||
+                !Number.isFinite(Number(r.lng))) return;
+
+            L.circleMarker(
+                [Number(r.lat), Number(r.lng)],
+                {
+
+                    radius: 9,
+                    color: '#fff',
+                    weight: 2,
+
+                    fillColor:
+                        r.pct >= 90 ? '#dc2626' : '#16a34a',
+
+                    fillOpacity: 0.95
+
+                }
+
+            ).bindPopup(
+
+                `<b>⛺ ${esc(r.name)}</b>
+                ${tag(r.src)}
+                <br>Occupancy ${esc(r.occ)}/${esc(r.cap)}
+                (${esc(r.pct)}%)
+                <br><a href="${esc(r.url)}">Open</a>`
+
+            ).addTo(groups.camps);
+
+        });
+
+
+        // RESCUE TEAMS
+
+        (d.teams || []).forEach(function (r) {
+
+            if (!Number.isFinite(Number(r.lat)) ||
+                !Number.isFinite(Number(r.lng))) return;
+
+            L.marker(
+                [Number(r.lat), Number(r.lng)],
+                {
+
+                    icon: L.divIcon({
+
+                        className: '',
+
+                        html:
+                            '<div style="background:#1d4ed8;color:white;border-radius:6px;padding:2px 5px;font-size:13px">🚤</div>'
+
+                    })
+
+                }
+
+            ).bindPopup(
+
+                `<b>${esc(r.name)}</b>
+                ${tag(r.src)}
+                <br>${esc(r.type)}
+                · ${esc(r.status)}
+                <br>${r.is_base
+                    ? 'Base location (no field position entered)'
+                    : 'Last reported position: ' + esc(r.at)}
+                <br><a href="${esc(r.url)}">Open</a>`
+
+            ).addTo(groups.teams);
+
+        });
+
+
+        // AFFECTED AREAS
+
+        (d.areas || []).forEach(function (r) {
+
+            if (!Number.isFinite(Number(r.lat)) ||
+                !Number.isFinite(Number(r.lng))) return;
+
+            L.circle(
+                [Number(r.lat), Number(r.lng)],
+                {
+
+                    radius: Math.min(
+                        12000,
+                        2000 + Number(r.pop || 0) * 3
+                    ),
+
+                    color: '#7c3aed',
+                    weight: 1,
+                    fillOpacity: 0.25
+
+                }
+
+            ).bindPopup(
+
+                `<b>${esc(r.name)}</b>
+                ${tag(r.src)}
+                <br>Affected population ${esc(r.pop)}
+                · houses damaged ${esc(r.houses)}
+                <br>${esc(r.status)}`
+
+            ).addTo(groups.areas);
+
+        });
+
+
+        // HOSPITALS
+
+        (d.hospitals || []).forEach(function (r) {
+
+            if (!Number.isFinite(Number(r.lat)) ||
+                !Number.isFinite(Number(r.lng))) return;
+
+            L.circleMarker(
+                [Number(r.lat), Number(r.lng)],
+                {
+
+                    radius: 7,
+                    color: '#fff',
+                    weight: 1.5,
+                    fillColor: '#0ea5e9',
+                    fillOpacity: 0.95
+
+                }
+
+            ).bindPopup(
+
+                `<b>🏥 ${esc(r.name)}</b>
+                ${tag(r.src)}
+                <br>Beds ${esc(r.beds)}/${esc(r.total)}
+                (as of ${esc(r.upd)})
+                <br>${esc(r.status)}`
+
+            ).addTo(groups.hospitals);
+
+        });
+
+
+        // FLOOD ALERTS
+
+        (d.alerts || []).forEach(function (r) {
+
+            if (!Number.isFinite(Number(r.lat)) ||
+                !Number.isFinite(Number(r.lng))) return;
+
+            L.circle(
+                [Number(r.lat), Number(r.lng)],
+                {
+
+                    radius: 30000,
+
+                    color: FL[r.level] || '#f59e0b',
+
+                    weight: 2,
+                    fillOpacity: 0.12
+
+                }
+
+            ).bindPopup(
+
+                `<b>${esc(r.title)}</b>
+                ${tag(r.src)}
+                <br>${esc(r.district)}
+                · level ${esc(r.level)}
+                <br>Source: ${esc(r.source)}`
+
+            ).addTo(groups.alerts);
+
+        });
+
+
+        // EVACUATION ROUTES
+
+        (d.routes || []).forEach(function (r) {
+
+            if (!Array.isArray(r.a) ||
+                !Array.isArray(r.b)) return;
+
+            L.polyline(
+                [r.a, r.b],
+                {
+
+                    color:
+                        r.status === 'open'
+                            ? '#16a34a'
+                            : '#dc2626',
+
+                    weight: 4,
+                    dashArray: '6 6'
+
+                }
+
+            ).bindPopup(
+
+                `<b>${esc(r.name)}</b>
+                ${tag(r.src)}
+                <br>${esc(r.plan)}
+                · ${esc(r.status)}
+                ${r.km ? ' · ' + esc(r.km) + ' km' : ''}`
+
+            ).addTo(groups.routes);
+
+        });
+
+
+        // UPDATE TIMESTAMP
+
+        document.getElementById('stamp').textContent =
+            'Database snapshot: ' +
+            (d.generated || new Date().toLocaleString());
+
+
+        // Refresh map dimensions
+
+        setTimeout(function () {
+
+            map.invalidateSize();
+
+        }, 150);
+
+    }
+
+
+    // =====================================
+    // 7. FETCH API DATA
+    // =====================================
+
+    async function load() {
+
+        try {
+
+            const response = await fetch('/api/map', {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+
+                throw new Error(
+                    'API returned HTTP ' + response.status
+                );
+
+            }
+
+            const data = await response.json();
+
+            console.log('Map API data:', data);
+
+            draw(data);
+
+        }
+
+        catch (error) {
+
+            console.error('Map loading error:', error);
+
+            document.getElementById('stamp').textContent =
+                'Map data loading failed';
+
+            if (typeof toast === 'function') {
+
+                toast('Map refresh failed', 'warning');
+
+            }
+
+        }
+
+    }
+
+
+    // =====================================
+    // 8. INITIAL LOAD
+    // =====================================
+
+    load();
+
+
+    // =====================================
+    // 9. AUTO REFRESH EVERY 30 SECONDS
+    // =====================================
+
+    setInterval(load, 30000);
+
+
+    // =====================================
+    // 10. SOS LIVE UPDATE
+    // =====================================
+
+    document.addEventListener('sos-update', load);
+
+
+    // =====================================
+    // 11. RESIZE MAP
+    // =====================================
+
+    window.addEventListener('resize', function () {
+
+        map.invalidateSize();
+
+    });
+
+});
+
+</script>
+
+{% endblock %}

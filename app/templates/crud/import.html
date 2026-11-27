@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Import · {{ cfg.title }}{% endblock %}
+{% block content %}
+<h4>Import CSV · <span class="text-primary">{{ cfg.title }}</span></h4>
+<div class="card"><div class="card-body">
+  <p class="text-muted small mb-2">Header row must use column names. Download the template, fill it and upload. Foreign keys use numeric IDs (see the CSV export). Imported records are saved as <b>reported</b> (never verified). Business rules (stock, capacity, etc.) are applied to every row; invalid rows are rejected and listed below.</p>
+  <a class="btn btn-sm btn-outline-secondary mb-3" href="{{ url_for('crud.template_csv', slug=cfg.slug) }}" data-noload><i class="bi bi-download"></i> Download template</a>
+  <form method="post" enctype="multipart/form-data" class="d-flex gap-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" class="form-control" name="file" accept=".csv" required><button class="btn btn-primary">Import</button>
+    <a class="btn btn-light" href="{{ url_for('crud.index', slug=cfg.slug) }}">Back</a></form>
+  {% if report %}<hr><div class="alert alert-{{ 'success' if report.ok else 'warning' }}">Imported <b>{{ report.ok }}</b> row(s). Rejected: <b>{{ report.total_errors }}</b>.</div>
+  {% if report.errors %}<ul class="small text-danger">{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}{% endif %}
+</div></div>
+{% endblock %}

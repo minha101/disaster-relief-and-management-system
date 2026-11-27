@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Smart Allocation{% endblock %}
+{% block content %}
+<h4><i class="bi bi-boxes text-primary"></i> Smart resource allocation</h4>
+<div class="alert alert-info small">For every open camp the system compares stock of <b>food (pack)</b>, <b>water (litre)</b> and <b>medical (kit)</b> with the occupancy-based need.
+Planning assumptions (editable in System Settings): food {{ r.rates.food }}/person/day, water {{ r.rates.water }} L/person/day, medical {{ r.rates.medical }} kit/person/day, target {{ r.plan_days|int }} days of supply, critical below {{ r.crit_days|int }} day(s). These are planning inputs, not official standards.
+Only resources recorded in the standard units are counted{% if r.skipped %} (ignored: {{ r.skipped|join(', ') }}){% endif %}. Pending allocations are counted as incoming.</div>
+<div class="card mb-3"><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Camp</th><th>Occupancy</th>{% for k in kinds %}<th>{{ k|title }} (days of supply)</th>{% endfor %}</tr></thead>
+{% for e in r.camps %}<tr><td><a href="{{ url_for('crud.detail', slug='relief_camps', id=e.camp.id) }}">{{ e.camp.name }}</a>{% if e.camp.data_source=='sample' %} <span class="badge badge-sample">sample</span>{% endif %}</td><td>{{ e.occupancy }}</td>
+{% for k in kinds %}{% set x=e.kinds[k] %}<td>{% if x.days is none %}<span class="text-muted">n/a</span>{% else %}<span class="badge text-bg-{{ {'ok':'success','low':'warning','critical':'danger'}[x.status] }}">{{ '%.1f'|format(x.days) }} d</span>{% endif %}<div class="small text-muted">stock {{ '{:,.0f}'.format(x.stock) }}{% if x.incoming %} +{{ '{:,.0f}'.format(x.incoming) }} incoming{% endif %}{% if x.shortage>0 and e.occupancy %} · short {{ '{:,.0f}'.format(x.shortage) }} {{ x.unit }}{% endif %}</div></td>{% endfor %}</tr>
+{% else %}<tr><td colspan="5" class="text-muted p-3">No open camps.</td></tr>{% endfor %}</table></div></div></div>
+<h5>Suggested transfers</h5>
+<div class="card"><div class="card-body p-0"><table class="table table-sm align-middle mb-0"><thead><tr><th>To camp</th><th>Need</th><th>Source</th><th>Qty</th><th></th></tr></thead>
+{% for s in r.suggestions %}<tr><td>{{ s.camp.name }}</td><td>{{ s.kind }}{% if s.days is not none %} <small class="text-muted">({{ '%.1f'|format(s.days) }} d left)</small>{% endif %}</td>
+{% if s.unmet %}<td colspan="2" class="text-danger">No available stock for {{ '{:,.0f}'.format(s.quantity) }} {{ s.unit }} — procurement/donation needed</td><td></td>
+{% else %}<td>{{ s.resource.name }} @ {{ s.inventory.camp.name if s.from_camp else s.inventory.warehouse_name }}{% if s.from_camp %} <span class="badge text-bg-light border">camp surplus</span>{% endif %}</td><td>{{ '{:,.0f}'.format(s.quantity) }} {{ s.unit }}</td>
+<td class="text-end">{% if can_propose %}<form method="post" action="{{ url_for('intel.propose') }}" class="d-inline" data-confirm="Create a proposed allocation of {{ '{:,.0f}'.format(s.quantity) }} {{ s.unit }} to {{ s.camp.name }}?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="camp_id" value="{{ s.camp.id }}"><input type="hidden" name="inventory_id" value="{{ s.inventory.id }}"><input type="hidden" name="quantity" value="{{ s.quantity }}"><button class="btn btn-sm btn-primary">Propose</button></form>{% endif %}</td>{% endif %}</tr>
+{% else %}<tr><td colspan="5" class="text-muted p-3">No shortages detected against the current assumptions.</td></tr>{% endfor %}</table></div></div>
+<p class="small text-muted mt-2">Proposals are drafts: an authorised user approves them and marks them delivered in the Resource Allocation module, which then moves the stock and writes ledger entries.</p>
+{% endblock %}

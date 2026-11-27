@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+{% macro stat(icon, label, value, red=false, url=None) %}
+<div class="col-6 col-md-4 col-xl"><div class="card h-100"><div class="card-body stat {{ 'red' if red }}"><div class="ico"><i class="bi bi-{{ icon }}"></i></div>
+<div><div class="num">{{ value }}</div><div class="text-muted small">{{ label }}</div></div></div></div></div>
+{% endmacro %}
+<div class="d-flex align-items-center mb-3"><div><h4 class="mb-0">Welcome, {{ current_user.full_name.split(' ')[0] }}</h4><small class="text-muted">{{ current_user.role_names }} · figures are calculated live from the database</small></div>
+<form method="post" action="{{ url_for('main.set_scope', value='all' if scope=='real' else 'real') }}" class="ms-auto" data-noload><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('main.dashboard') }}">
+<button class="btn btn-sm btn-outline-secondary">{{ 'Showing real data only' if scope=='real' else 'Showing all data (incl. sample)' }} — switch</button></form></div>
+<div class="row g-3 mb-3">
+{{ stat('cloud-lightning-rain','Total disasters',c.disasters) }}
+{{ stat('droplet-half','Active flood incidents',c.active_floods, true) }}
+{{ stat('people','Affected people','{:,}'.format(c.affected)) }}
+{{ stat('life-preserver','People rescued','{:,}'.format(c.rescued)) }}
+{{ stat('broadcast','Pending SOS',c.pending_sos, true) }}
+</div><div class="row g-3 mb-3">
+{{ stat('shield-check','Active rescue teams',c.active_teams) }}
+{{ stat('house-heart','Relief camps (open)',c.camps) }}
+{{ stat('box-seam','Resource types in stock',c.resources) }}
+{{ stat('cash-coin','Donations (PKR)','{:,.0f}'.format(c.donations)) }}
+{{ stat('people-fill','Volunteers',c.volunteers) }}
+</div>
+{% if c.low_stock %}<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle"></i> {{ c.low_stock }} inventory line(s) at or below reorder level. {% if current_user.can('resource_allocations','view') %}<a href="{{ url_for('intel.allocation_page') }}">Open Smart Allocation</a>{% endif %}</div>{% endif %}
+<div class="row g-3">
+ <div class="col-lg-8"><div class="card h-100"><div class="card-body"><h6>Incidents per month (last 12)</h6><canvas id="chMonth" height="110"></canvas></div></div></div>
+ <div class="col-lg-4"><div class="card h-100"><div class="card-body"><h6>Open incidents by severity</h6><canvas id="chSev" height="200"></canvas></div></div></div>
+ <div class="col-lg-7"><div class="card h-100"><div class="card-body"><h6>Affected vs rescued — top districts</h6><canvas id="chDist" height="120"></canvas></div></div></div>
+ <div class="col-lg-5"><div class="card h-100"><div class="card-body"><h6>SOS requests by status</h6><canvas id="chSos" height="150"></canvas></div></div></div>
+ <div class="col-lg-6"><div class="card h-100"><div class="card-body"><h6>Camp occupancy %</h6><canvas id="chCamp" height="150"></canvas></div></div></div>
+ <div class="col-lg-6"><div class="card h-100"><div class="card-body"><h6>Donations received per month (PKR)</h6><canvas id="chDon" height="150"></canvas></div></div></div>
+ <div class="col-lg-6"><div class="card h-100"><div class="card-body"><h6><i class="bi bi-cone-striped text-danger"></i> Emergency alerts</h6>
+  {% for a in flood_alerts %}<div class="border-bottom py-1"><span class="badge text-bg-danger">flood · {{ a.flood_level }}</span> {{ a.title }} <small class="text-muted">— {{ a.source_name }}{{ ' · SAMPLE' if a.data_source=='sample' }}</small></div>{% endfor %}
+  {% for a in weather_alerts %}<div class="border-bottom py-1"><span class="badge text-bg-warning">weather · {{ a.severity }}</span> {{ a.title }} <small class="text-muted">— {{ a.source_name }}{{ ' · SAMPLE' if a.data_source=='sample' }}</small></div>{% endfor %}
+  {% if not flood_alerts and not weather_alerts %}<span class="text-muted">No active alerts recorded.</span>{% endif %}</div></div></div>
+ {% if latest %}<div class="col-lg-6"><div class="card h-100"><div class="card-body"><h6><span class="sos-dot"></span> Latest SOS requests</h6>
+  <table class="table table-sm mb-0"><tbody>{% for r in latest %}<tr><td><a href="{{ url_for('crud.detail', slug='emergency_requests', id=r.id) }}">{{ r.tracking_code }}</a></td><td>{{ r.people_count }} ppl</td><td><span class="badge text-bg-{{ 'danger' if r.priority in ['critical','high'] else 'info' }}">{{ r.priority }}</span></td><td>{{ r.status|replace('_',' ') }}</td><td class="text-muted small">{{ r.created_at.strftime('%d %b %H:%M') }}</td></tr>{% endfor %}</tbody></table></div></div></div>{% endif %}
+ {% if my_sos %}<div class="col-lg-6"><div class="card h-100"><div class="card-body"><h6>My SOS requests</h6>{% for r in my_sos %}<div class="border-bottom py-1"><a href="{{ url_for('sos.track', code=r.tracking_code) }}">{{ r.tracking_code }}</a> — {{ r.status|replace('_',' ') }}</div>{% endfor %}<a class="btn btn-danger btn-sm mt-2" href="{{ url_for('sos.submit') }}">New SOS</a></div></div></div>{% endif %}
+ {% if districts %}<div class="col-lg-7"><div class="card h-100"><div class="card-body"><h6>District-wise statistics</h6><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>District</th><th>Incidents</th><th>Affected</th><th>Rescued</th><th>Rescue %</th><th>Open SOS</th></tr></thead>
+  {% for d in districts %}<tr><td>{{ d.district }} <small class="text-muted">{{ d.province }}</small></td><td>{{ d.incidents }}</td><td>{{ '{:,}'.format(d.affected) }}</td><td>{{ '{:,}'.format(d.rescued) }}</td><td><div class="progress"><div class="progress-bar bg-success" style="width:{{ d.rescue_pct }}%"></div></div></td><td>{{ d.open_sos }}</td></tr>{% endfor %}</table></div></div></div></div>{% endif %}
+ {% if recent %}<div class="col-lg-5"><div class="card h-100"><div class="card-body"><h6>Recent activity</h6>
+  {% for r in recent %}<div class="border-bottom py-1 small">{% if r.action is defined %}<b>{{ r.action }}</b> {{ r.entity or '' }} <span class="text-muted">by {{ lookups.users.get(r.user_id,'system') }} · {{ r.created_at.strftime('%d %b %H:%M') }}</span>{% else %}<a href="{{ url_for('crud.detail', slug='incidents', id=r.id) }}">{{ r.title }}</a> <span class="text-muted">· {{ r.severity }}</span>{% endif %}</div>{% endfor %}</div></div></div>{% endif %}
+</div>
+<p class="text-muted small mt-3">Record mix — {% for k,v in comp.items() %}{{ k }}: {{ v.sample }} sample / {{ v.reported }} reported / {{ v.verified }} verified{{ '; ' if not loop.last }}{% endfor %}.</p>
+{% endblock %}
+{% block scripts %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+const COL={low:'#94a3b8',moderate:'#3b82f6',high:'#f59e0b',critical:'#dc2626'};
+api('/api/dashboard').then(d=>{
+ new Chart('chMonth',{type:'line',data:{labels:d.months,datasets:[{label:'Incidents',data:d.incidents,borderColor:'#1d4ed8',backgroundColor:'rgba(29,78,216,.12)',fill:true,tension:.3}]},options:{plugins:{legend:{display:false}}}});
+ const sk=Object.keys(d.severity);new Chart('chSev',{type:'doughnut',data:{labels:sk,datasets:[{data:sk.map(k=>d.severity[k]),backgroundColor:sk.map(k=>COL[k]||'#64748b')}]}});
+ new Chart('chDist',{type:'bar',data:{labels:d.districts.names,datasets:[{label:'Affected',data:d.districts.affected,backgroundColor:'#ef4444'},{label:'Rescued',data:d.districts.rescued,backgroundColor:'#22c55e'}]}});
+ const so=Object.keys(d.sos);new Chart('chSos',{type:'bar',data:{labels:so.map(s=>s.replace('_',' ')),datasets:[{data:so.map(k=>d.sos[k]),backgroundColor:'#1d4ed8'}]},options:{plugins:{legend:{display:false}}}});
+ new Chart('chCamp',{type:'bar',data:{labels:d.camps.names,datasets:[{data:d.camps.pct,backgroundColor:d.camps.pct.map(p=>p>=90?'#dc2626':p>=70?'#f59e0b':'#1d4ed8')}]},options:{indexAxis:'y',scales:{x:{max:100}},plugins:{legend:{display:false}}}});
+ new Chart('chDon',{type:'bar',data:{labels:d.months,datasets:[{data:d.donations,backgroundColor:'#0ea5e9'}]},options:{plugins:{legend:{display:false}}}});
+});
+</script>{% endblock %}

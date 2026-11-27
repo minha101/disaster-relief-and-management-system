@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Track SOS{% endblock %}
+{% block content %}<div class="row justify-content-center"><div class="col-lg-7">
+<div class="card mb-3"><div class="card-body"><h5>Track a request</h5>
+<form method="post" action="{{ url_for('sos.lookup') }}" class="d-flex gap-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input class="form-control" name="code" placeholder="SOS-XXXXXXXX" value="{{ code if req else '' }}" required maxlength="20"><button class="btn btn-primary">Check</button></form></div></div>
+{% if code and not req %}<div class="alert alert-warning">No request found for that code.</div>{% endif %}
+{% if req %}<div class="card"><div class="card-body"><div class="d-flex justify-content-between"><h5>{{ req.tracking_code }}</h5>
+<span class="badge text-bg-{{ 'success' if req.status in ['rescued','resolved'] else 'danger' if req.status=='pending' else 'primary' }} fs-6">{{ req.status|replace('_',' ') }}</span></div>
+<p class="text-muted small">Submitted {{ req.created_at.strftime('%d %b %Y %H:%M') }} UTC · {{ req.people_count }} people · priority {{ req.priority }}{% if team %} · a rescue team has been assigned{% endif %}</p>
+<ul class="list-group">{% for u in req.updates %}<li class="list-group-item d-flex justify-content-between"><span>{{ u.status|replace('_',' ') }}</span><small class="text-muted">{{ u.created_at.strftime('%d %b %H:%M') }}</small></li>{% endfor %}</ul>
+<p class="small text-muted mt-3 mb-0">Status reflects what authorities have entered. If your situation worsens, call 1122 / 115.</p></div></div>{% endif %}
+</div></div>{% endblock %}

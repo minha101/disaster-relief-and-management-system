@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Welcome{% endblock %}
+{% block content %}
+<div class="hero p-4 p-lg-5 mb-4"><h1 class="fw-bold">Flood &amp; Disaster Relief Coordination</h1>
+<p class="lead mb-4">Report emergencies, coordinate rescue teams, track relief camps and stock — one shared picture for Pakistan.</p>
+<a class="btn btn-danger btn-lg me-2" href="{{ url_for('sos.submit') }}"><i class="bi bi-broadcast"></i> Send an SOS</a>
+<a class="btn btn-light btn-lg me-2" href="{{ url_for('sos.lookup') }}">Track a request</a><a class="btn btn-outline-light btn-lg" href="{{ url_for('auth.login') }}">Staff sign in</a></div>
+<div class="alert alert-warning"><b>Life in danger?</b> Call <b>1122</b> (Rescue, where available) or <b>115</b> (Edhi ambulance) immediately. This web form supports, but does not replace, emergency calls.</div>
+<div class="row g-3">
+ <div class="col-md-6"><div class="card h-100"><div class="card-body"><h5>Active flood alerts</h5>
+  {% for a in flood_alerts %}<div class="border-bottom py-2"><span class="badge text-bg-danger">{{ a.flood_level }}</span> {{ a.title }}<br><small class="text-muted">Source: {{ a.source_name }}{% if a.data_source=='sample' %} · SAMPLE{% endif %}</small></div>{% else %}<p class="text-muted">No active flood alerts recorded.</p>{% endfor %}</div></div></div>
+ <div class="col-md-6"><div class="card h-100"><div class="card-body"><h5>Active weather alerts</h5>
+  {% for a in weather_alerts %}<div class="border-bottom py-2"><span class="badge text-bg-warning">{{ a.severity }}</span> {{ a.title }}<br><small class="text-muted">Source: {{ a.source_name }}{% if a.data_source=='sample' %} · SAMPLE{% endif %}</small></div>{% else %}<p class="text-muted">No active weather alerts recorded.</p>{% endfor %}
+  <a href="{{ url_for('main.transparency') }}" class="btn btn-outline-primary btn-sm mt-3">Donation &amp; relief transparency</a></div></div></div></div>
+<p class="text-muted small mt-3">Alerts are entered manually by authorised staff with their source; the system does not generate weather or river-level data.</p>
+{% endblock %}
